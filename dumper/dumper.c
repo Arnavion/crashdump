@@ -42,6 +42,7 @@ typedef struct _StackTrace {
 	PCONTEXT contextRecord;
 	STACKFRAME64 currentStackFrame;
 	bool isFirstParameter;
+	LPVOID scratchSpace;
 } StackTrace;
 
 bool printBasicType(StackTrace* stackTrace, PSYMBOL_INFOW pSymInfo, ULONG typeIndex, void* valueLocation, bool whilePrintingPointer)
@@ -505,7 +506,87 @@ BOOL CALLBACK enumParams(
 		swprintf_s(stackTrace->message + stackTrace->written, sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
 			L"%ls = ", pSymInfo->Name);
 
-	void* valueLocation = (void*)(stackTrace->currentStackFrame.AddrFrame.Offset + pSymInfo->Address);
+	void* valueLocation = NULL;
+	if (pSymInfo->Flags & SYMFLAG_REGISTER)
+	{
+		if (stackTrace->scratchSpace == NULL)
+		{
+			stackTrace->written +=
+				swprintf_s(stackTrace->message + stackTrace->written, sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
+					L"<Could not allocate memory to write register value>");
+			return TRUE;
+		}
+
+		valueLocation = stackTrace->scratchSpace;
+
+		switch (pSymInfo->Register)
+		{
+#ifndef _WIN64
+		case 17:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Eax, sizeof(stackTrace->contextRecord->Eax), NULL);
+			break;
+		case 18:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Ecx, sizeof(stackTrace->contextRecord->Ecx), NULL);
+			break;
+		case 19:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Edx, sizeof(stackTrace->contextRecord->Edx), NULL);
+			break;
+		case 20:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Ebx, sizeof(stackTrace->contextRecord->Ebx), NULL);
+			break;
+#else
+		case 328:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Rax, sizeof(stackTrace->contextRecord->Rax), NULL);
+			break;
+
+		case 329:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Rbx, sizeof(stackTrace->contextRecord->Rbx), NULL);
+			break;
+
+		case 330:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Rcx, sizeof(stackTrace->contextRecord->Rcx), NULL);
+			break;
+
+		case 331:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Rdx, sizeof(stackTrace->contextRecord->Rdx), NULL);
+			break;
+
+		case 336:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->R8, sizeof(stackTrace->contextRecord->R8), NULL);
+			break;
+
+		case 337:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->R9, sizeof(stackTrace->contextRecord->R9), NULL);
+			break;
+
+		case 154:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Xmm0, sizeof(stackTrace->contextRecord->Xmm0), NULL);
+			break;
+
+		case 155:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Xmm1, sizeof(stackTrace->contextRecord->Xmm1), NULL);
+			break;
+
+		case 156:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Xmm2, sizeof(stackTrace->contextRecord->Xmm2), NULL);
+			break;
+
+		case 157:
+			WriteProcessMemory(stackTrace->process, valueLocation, &stackTrace->contextRecord->Xmm3, sizeof(stackTrace->contextRecord->Xmm3), NULL);
+			break;
+#endif
+
+		default:
+			stackTrace->written +=
+				swprintf_s(stackTrace->message + stackTrace->written, sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
+					L"<Unknown register %lu>", pSymInfo->Register);
+			return TRUE;
+		}
+	}
+	else
+	{
+		valueLocation = (void*)(stackTrace->currentStackFrame.AddrFrame.Offset + pSymInfo->Address);
+	}
 
 	if (!printType(stackTrace, pSymInfo, valueLocation))
 	{
@@ -618,6 +699,9 @@ int main(int argc, char* argv[])
 #endif
 
 	stackTrace->contextRecord = &remoteContextRecord;
+
+	// The biggest registers are the XMM registers (128 bits), so reserve enough space for them.
+	stackTrace->scratchSpace = VirtualAllocEx(stackTrace->process, NULL, 128 / 8, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 
 	wchar_t tempPath[MAX_PATH + 1];
 	GetTempPathW(sizeof(tempPath) / sizeof(tempPath[0]), tempPath);

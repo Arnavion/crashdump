@@ -17,6 +17,7 @@ The motivation to have a stack printer separate from a minidump writer is to cov
 
 - If dumper links against the default Windows dbghelp.dll (in C:\Windows\System32 / SysWow64), then stack traces can only work if PDBs are available locally or on a network share. That is, symbol servers over HTTP will not work. Unless you want to ship PDBs for your application to every user, you'll have to bundle dbgcore.dll, dbghelp.dll and symsrv.dll from the Windows 10 Debug Tools ("C:\Program Files (x86)\Windows Kits\10\Debuggers\x86" and x64). The crasher project does this in its PostBuildEvent.
 
+- Register values are printed by writing them to a "scratch space" page allocated on crasher and pretending that's where they're being read from. This means the code that pretty-prints the value of a function parameter always needs to dereference a memory location in the crasher process. Currently this page is allocated only when dumper is walking the stack. This won't work if crasher is OOM, in which case it'll be better for crasher to always reserve this space as parts of its startup, and pass its address to dumper when invoking it as another CLI argument.
 
 ### License ###
 
