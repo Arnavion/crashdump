@@ -39,6 +39,7 @@ typedef struct _StackTrace {
 	int written;
 	HANDLE process;
 	HANDLE thread;
+	PCONTEXT contextRecord;
 	STACKFRAME64 currentStackFrame;
 	bool isFirstParameter;
 } StackTrace;
@@ -516,7 +517,7 @@ BOOL CALLBACK enumParams(
 	return TRUE;
 }
 
-void printStack(PCONTEXT context, StackTrace* stackTrace)
+void printStack(StackTrace* stackTrace)
 {
 	if (!SymInitializeW(stackTrace->process, L"srv*http://arnaviont61/symbols", TRUE))
 	{
@@ -535,7 +536,7 @@ void printStack(PCONTEXT context, StackTrace* stackTrace)
 
 	for (int i = 0; ; i++)
 	{
-		if (!StackWalk64(machineType, stackTrace->process, stackTrace->thread, &stackTrace->currentStackFrame, context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL))
+		if (!StackWalk64(machineType, stackTrace->process, stackTrace->thread, &stackTrace->currentStackFrame, stackTrace->contextRecord, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL))
 		{
 			break;
 		}
@@ -616,10 +617,12 @@ int main(int argc, char* argv[])
 	stackTrace->currentStackFrame.AddrStack.Mode = AddrModeFlat;
 #endif
 
+	stackTrace->contextRecord = &remoteContextRecord;
+
 	wchar_t tempPath[MAX_PATH + 1];
 	GetTempPathW(sizeof(tempPath) / sizeof(tempPath[0]), tempPath);
 
-	printStack(&remoteContextRecord, stackTrace);
+	printStack(stackTrace);
 	BOOL wroteStackTrace = stackTrace->written > 0;
 
 	wchar_t stackTraceFilename[MAX_PATH + 1];
