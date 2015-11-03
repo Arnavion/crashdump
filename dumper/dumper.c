@@ -583,6 +583,30 @@ BOOL CALLBACK enumParams(
 			return TRUE;
 		}
 	}
+	else if (pSymInfo->Flags & SYMFLAG_REGREL)
+	{
+		switch (pSymInfo->Register)
+		{
+#ifndef _WIN64
+		case 22:
+			valueLocation = ((char*)stackTrace->contextRecord->Ebp) + pSymInfo->Address;
+			break;
+#else
+		case 334:
+			valueLocation = ((char*)stackTrace->contextRecord->Rbp) + pSymInfo->Address;
+			break;
+		case 335:
+			valueLocation = ((char*)stackTrace->contextRecord->Rsp) + 0x20 + pSymInfo->Address;
+			break;
+#endif
+
+		default:
+			stackTrace->written +=
+				swprintf_s(stackTrace->message + stackTrace->written, sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
+					L"<Relative to unknown register %lu>", pSymInfo->Register);
+			return TRUE;
+		}
+	}
 	else
 	{
 		valueLocation = (void*)(stackTrace->currentStackFrame.AddrFrame.Offset + pSymInfo->Address);
