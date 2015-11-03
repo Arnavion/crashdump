@@ -527,9 +527,15 @@ void printStack(PCONTEXT context, StackTrace* stackTrace)
 	symbol->MaxNameLen = 255;
 	symbol->SizeOfStruct = sizeof(SYMBOL_INFOW);
 
+#ifndef _WIN64
+	DWORD machineType = IMAGE_FILE_MACHINE_I386;
+#else
+	DWORD machineType = IMAGE_FILE_MACHINE_AMD64;
+#endif
+
 	for (int i = 0; ; i++)
 	{
-		if (!StackWalk64(IMAGE_FILE_MACHINE_I386, stackTrace->process, stackTrace->thread, &stackTrace->currentStackFrame, context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL))
+		if (!StackWalk64(machineType, stackTrace->process, stackTrace->thread, &stackTrace->currentStackFrame, context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL))
 		{
 			break;
 		}
@@ -594,12 +600,21 @@ int main(int argc, char* argv[])
 	ReadProcessMemory(stackTrace->process, exception, &remoteException, sizeof(remoteException), NULL);
 	ReadProcessMemory(stackTrace->process, remoteException.ContextRecord, &remoteContextRecord, sizeof(remoteContextRecord), NULL);
 
+#ifndef _WIN64
 	stackTrace->currentStackFrame.AddrPC.Offset = remoteContextRecord.Eip;
 	stackTrace->currentStackFrame.AddrPC.Mode = AddrModeFlat;
 	stackTrace->currentStackFrame.AddrFrame.Offset = remoteContextRecord.Ebp;
 	stackTrace->currentStackFrame.AddrFrame.Mode = AddrModeFlat;
 	stackTrace->currentStackFrame.AddrStack.Offset = remoteContextRecord.Esp;
 	stackTrace->currentStackFrame.AddrStack.Mode = AddrModeFlat;
+#else
+	stackTrace->currentStackFrame.AddrPC.Offset = remoteContextRecord.Rip;
+	stackTrace->currentStackFrame.AddrPC.Mode = AddrModeFlat;
+	stackTrace->currentStackFrame.AddrFrame.Offset = remoteContextRecord.Rbp;
+	stackTrace->currentStackFrame.AddrFrame.Mode = AddrModeFlat;
+	stackTrace->currentStackFrame.AddrStack.Offset = remoteContextRecord.Rsp;
+	stackTrace->currentStackFrame.AddrStack.Mode = AddrModeFlat;
+#endif
 
 	wchar_t tempPath[MAX_PATH + 1];
 	GetTempPathW(sizeof(tempPath) / sizeof(tempPath[0]), tempPath);
