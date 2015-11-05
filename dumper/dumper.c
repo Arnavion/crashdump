@@ -662,7 +662,21 @@ void printStack(StackTrace* stackTrace)
 
 			stackTrace->written +=
 				swprintf_s(&stackTrace->message[stackTrace->written], sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
-					L")\n");
+					L")");
+
+			DWORD pos;
+			IMAGEHLP_LINEW64 lineInfo = { 0 };
+			lineInfo.SizeOfStruct = sizeof(lineInfo);
+			if (SymGetLineFromAddrW64(stackTrace->process, stackTrace->currentStackFrame.AddrPC.Offset, &pos, &lineInfo))
+			{
+				stackTrace->written +=
+					swprintf_s(&stackTrace->message[stackTrace->written], sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
+						L" at %ls:%lu", lineInfo.FileName, lineInfo.LineNumber);
+			}
+
+			stackTrace->written +=
+				swprintf_s(&stackTrace->message[stackTrace->written], sizeof(stackTrace->message) / sizeof(stackTrace->message[0]) - stackTrace->written,
+					L"\n");
 		}
 		else
 		{
