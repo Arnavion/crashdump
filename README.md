@@ -1,3 +1,9 @@
+This repository is no longer maintained.
+
+If you have questions about this repository, open an issue at https://github.com/Arnavion/archived-repos-issues
+
+---
+
 ### crashdump ###
 
 Demonstrates how to have a C process (crasher.exe) have a stack trace and minidump taken if it crashes. Both are done by another process (dumper.exe), which is crucial to getting a dump with a sane stack trace.
